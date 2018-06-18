@@ -1,0 +1,53 @@
+----Q1
+data = LOAD 'full_text_clean.txt' AS (userid:chararray, lat:float, lon:float, tweet:chararray, mod_lat:int, mod_lon:int);
+small = SAMPLE data 0.1;
+STORE small INTO 'full_text_clean_small' USING PigStorage('\t');
+
+(I manually renamed the output file from the outputted folder)
+----Q2
+data = LOAD 'full_text_clean_small.txt' AS (userid:chararray, lat:float, lon:float, tweet:chararray, mod_lat:int, mod_lon:int);
+words = FOREACH data GENERATE FLATTEN(TOKENIZE(tweet)) as word;
+grouper = group words by word;
+counter = FOREACH grouper GENERATE group AS word, COUNT(words.word) as cnt;
+ordered = ORDER counter by cnt DESC;
+lmt = limit ordered 3;
+dump lmt;
+
+Output:
+(I,10941)
+(RT,7712)
+(the,7600)
+
+----Q3
+data = LOAD 'cities_clean.txt' AS (city:chararray, lat:float, lon:float, mod_lat:int, mod_lon:int);
+grouped = GROUP data ALL;
+counter = FOREACH grouped GENERATE COUNT(data);
+dump counter;
+
+Output:
+(6360)
+
+----Q4 
+(I have intentionallty limited the number of tweets for a quicker analysis, for the full list lim_tweet need 
+to be removed, and cross_data and other relevant variables needs to be updated. I have also inserted a limit at the 
+end to prevent the command line to be flooded)
+
+tweets = LOAD 'full_text_clean_small.txt' AS (userid:chararray, lat:float, lon:float, tweet:chararray, mod_lat1:double, mod_lon1:double);
+cities = LOAD 'cities_clean.txt' AS (city:chararray, lat:float, lon:float, mod_lat2:double, mod_lon2:double);
+lim_tweet = LIMIT tweets 1000;
+cross_data = CROSS lim_tweet, cities;
+dist = FOREACH cross_data GENERATE tweet, city, lim_tweet::lat, lim_tweet::lon, cities::lat, cities::lon, SQRT((mod_lat1 - mod_lat2) * (mod_lat1 - mod_lat2) + (mod_lon1 - mod_lon2) * (mod_lon1 - mod_lon2)) AS distance;
+by_tweet = GROUP dist BY tweet;
+min_dist = FOREACH by_tweet GENERATE group AS tweet, MIN(dist.distance) AS distance;
+joined = JOIN dist by tweet, min_dist by tweet;
+filter_tweet = FILTER joined by dist::distance == min_dist::distance;
+
+dist2 = FOREACH filter_tweet GENERATE lim_tweet::tweet, city, SQRT((lim_tweet::lat - cities::lat) * (lim_tweet::lat - cities::lat) + (lim_tweet::lon - cities::lon) * (lim_tweet::lon - cities::lon)) AS distance;
+by_tweet2 = GROUP dist2 BY tweet;
+min_dist2 = FOREACH by_tweet2 GENERATE group AS tweet, MIN(dist2.distance) AS distance;
+joined2 = JOIN dist2 by dist::lim_tweet::tweet, min_dist2 by tweet;
+filter_tweet2 = FILTER joined2 by  dist2::distance == min_dist2::distance;
+final = FOREACH filter_tweet2 GENERATE lim_tweet::tweet, cities::city, dist2::distance;
+
+lmt = LIMIT final 25;
+dump lmt;

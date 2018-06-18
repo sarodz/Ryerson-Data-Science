@@ -1,0 +1,59 @@
+Prep code:
+create database movies;
+use movies;
+
+create table movies.data(user_id INT, movie_id INT, rating INT, ts STRING)
+row format delimited 
+fields terminated by '\t';
+
+load data inpath '/user/root/u.data' overwrite into table movies.data;
+
+create table movies.users(user_id INT, age INT, gender STRING, occupation STRING, zip STRING)
+row format delimited 
+fields terminated by '|';
+
+load data inpath '/user/root/u.user' overwrite into table movies.users;
+
+Q1:
+SELECT d.user_id, COUNT(d.movie_id) as TotRated
+FROM movies.data d 
+INNER JOIN movies.users u ON u.user_id = d.user_id
+GROUP BY d.user_id
+ORDER BY TotRated DESC LIMIT 1;
+
+Result: 
+405     737
+
+Q2:
+SELECT AVG(rating)
+FROM movies.data
+WHERE movie_id = 178;
+ 
+Result: 
+4.344 
+ 
+Q3: 
+SELECT occupation, COUNT(rating) TotRating
+FROM movies.users u 
+INNER JOIN movies.data d ON u.user_id = d.user_id
+GROUP BY occupation
+ORDER BY TotRating DESC LIMIT 3;
+
+Result:
+student 21957
+other   10663
+educator        9442
+
+Q4:
+SELECT COUNT(a.user_id) Tot
+FROM (
+SELECT DISTINCT u.user_id
+FROM 
+(SELECT user_id
+FROM movies.users
+WHERE gender = 'M') u
+INNER JOIN movies.data d on u.user_id = d.user_id
+WHERE d.rating = 5) a;
+
+Result:
+657
